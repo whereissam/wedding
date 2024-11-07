@@ -142,7 +142,7 @@ const PhotoBook = () => {
           border-radius: 2rem;
           box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05);
           padding: 2rem;
-          margin: 2rem auto;
+          margin: 0 auto;
           max-width: 1200px;
         }
 

@@ -1,10 +1,12 @@
 import PhotoBook from "./components/PhotoBook";
+import Navbar from "./components/ui/Navbar";
 
 function App() {
   return (
-    <div>
+    <>
+      <Navbar />
       <PhotoBook />
-    </div>
+    </>
   );
 }
 
