@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 const fontStyle = { fontFamily: "Dancing Script, cursive" };
 
 const PhotoBook = () => {
@@ -36,6 +36,15 @@ const PhotoBook = () => {
     }, 600);
   };
 
+  const createImagePromise = (src) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(src);
+      img.onerror = () => resolve(defaultPhotoUrl);
+      img.src = src;
+    });
+  };
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowHint(false);
@@ -45,19 +54,39 @@ const PhotoBook = () => {
   }, []);
 
   useEffect(() => {
-    const preloadImages = () => {
-      // Create array of image URLs
-      const imageUrls = [
+    const preloadImages = async () => {
+      // First batch: Load essential images (first 6 pages)
+      const essentialImages = [
         "/images/6.jpg", // Cover
-        "/images/14.jpg", // Top image
-        ...Array.from({ length: 38 }, (_, i) => `/images/${i + 1}.jpg`),
+        "/images/14.jpg", // Header
+        ...Array.from({ length: 6 }, (_, i) => `/images/${i + 1}.jpg`),
       ];
 
-      // Preload each image
-      imageUrls.forEach((url) => {
-        const img = new Image();
-        img.src = url;
-      });
+      try {
+        await Promise.all(essentialImages.map(createImagePromise));
+        setImagesLoaded(true);
+
+        // Second batch: Load next 6 pages
+        const nextBatch = Array.from(
+          { length: 6 },
+          (_, i) => `/images/${i + 7}.jpg`
+        );
+        await Promise.all(nextBatch.map(createImagePromise));
+
+        // Third batch: Load remaining images in chunks
+        const remainingImages = Array.from(
+          { length: totalImages - 12 },
+          (_, i) => `/images/${i + 13}.jpg`
+        );
+
+        for (let i = 0; i < remainingImages.length; i += 6) {
+          const chunk = remainingImages.slice(i, i + 6);
+          await Promise.all(chunk.map(createImagePromise));
+        }
+      } catch (error) {
+        console.error("Error loading images:", error);
+        setImagesLoaded(true);
+      }
     };
 
     preloadImages();
@@ -66,33 +95,67 @@ const PhotoBook = () => {
   useEffect(() => {
     const loadImages = async () => {
       try {
-        const imageUrls = [
-          "/images/6.jpg",
-          "/images/14.jpg",
-          ...Array.from({ length: 38 }, (_, i) => `/images/${i + 1}.jpg`),
+        // First load essential images (first few pages)
+        const essentialUrls = [
+          "/images/6.jpg", // Cover
+          "/images/14.jpg", // Top image
+          ...Array.from({ length: 6 }, (_, i) => `/images/${i + 1}.jpg`),
         ];
 
         await Promise.all(
-          imageUrls.map(
+          essentialUrls.map(
             (url) =>
               new Promise((resolve, reject) => {
                 const img = new Image();
                 img.onload = resolve;
-                img.onerror = resolve; // Still resolve on error to not block loading
+                img.onerror = resolve;
                 img.src = url;
               })
           )
         );
 
         setImagesLoaded(true);
+
+        // Then preload the rest
+        const remainingUrls = Array.from(
+          { length: totalImages - 6 },
+          (_, i) => `/images/${i + 7}.jpg`
+        );
+
+        remainingUrls.forEach((url) => {
+          const img = new Image();
+          img.src = url;
+        });
       } catch (error) {
         console.error("Error preloading images:", error);
-        setImagesLoaded(true); // Set to true even on error to show content
+        setImagesLoaded(true);
       }
     };
 
     loadImages();
   }, []);
+
+  // Add this after your state declarations
+  const preloadNearbyImages = useCallback(
+    (currentPage) => {
+      const preloadRange = 3;
+      const start = Math.max(0, currentPage - preloadRange);
+      const end = Math.min(totalPages - 1, currentPage + preloadRange);
+
+      const imagesToPreload = [];
+      for (let i = start; i <= end; i++) {
+        imagesToPreload.push(`/images/${i + 1}.jpg`);
+      }
+
+      Promise.all(imagesToPreload.map(createImagePromise));
+    },
+    [totalPages]
+  );
+
+  // Add this useEffect to trigger preloading when page changes
+  useEffect(() => {
+    preloadNearbyImages(currentPageNumber);
+  }, [currentPageNumber, preloadNearbyImages]);
 
   if (!imagesLoaded) {
     return (
@@ -237,6 +300,15 @@ const PhotoBook = () => {
           position: relative;
         }
 
+        .image-container img {
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.image-container img.loaded {
+  opacity: 1;
+}
+
         .responsive-image {
           max-width: 100%;
           max-height: 100%;
@@ -324,6 +396,15 @@ const PhotoBook = () => {
   line-height: 1.2;
   background-clip: text;
 }
+
+.main-image img {
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.main-image img.loaded {
+  opacity: 1;
+}
       `}</style>
 
       <div className="main-container">
@@ -334,6 +415,7 @@ const PhotoBook = () => {
                 src="/images/14.jpg"
                 alt="Main Photo"
                 className="responsive-image"
+                onLoad={(e) => e.target.classList.add("loaded")}
                 onError={(e) => {
                   e.target.src = defaultPhotoUrl;
                   e.target.onerror = null;
@@ -365,7 +447,8 @@ const PhotoBook = () => {
                     src="/images/6.jpg"
                     alt="Cover"
                     className="responsive-image"
-                    loading="lazy"
+                    loading="eager"
+                    onLoad={(e) => e.target.classList.add("loaded")}
                     onError={(e) => {
                       e.target.src = defaultPhotoUrl;
                       e.target.onerror = null;
@@ -378,55 +461,60 @@ const PhotoBook = () => {
             {/* Pages */}
             {pages.map((page, index) => {
               const isVisible = Math.abs(index - currentPageNumber) <= 2;
+              const shouldPreload = Math.abs(index - currentPageNumber) <= 3;
+
+              if (!isVisible) return null;
 
               return (
-                isVisible && (
-                  <div
-                    key={page.id}
-                    className={`page ${index < currentPageNumber ? "flipped" : ""}`}
-                    style={{
-                      zIndex: totalPages - Math.abs(currentPageNumber - index),
-                      display: isVisible ? "block" : "none",
-                    }}
-                  >
-                    <div className="page-content">
-                      <div
-                        className="page-front"
-                        onClick={() => index >= currentPageNumber && nextPage()}
-                      >
-                        <div className="image-container">
-                          <img
-                            src={page.src}
-                            alt={`Page ${index + 1}`}
-                            className="responsive-image"
-                            loading="lazy"
-                            onError={(e) => {
-                              e.target.src = defaultPhotoUrl;
-                              e.target.onerror = null;
-                            }}
-                          />
-                        </div>
+                <div
+                  key={page.id}
+                  className={`page ${index < currentPageNumber ? "flipped" : ""}`}
+                  style={{
+                    zIndex: totalPages - Math.abs(currentPageNumber - index),
+                    visibility: isVisible ? "visible" : "hidden",
+                  }}
+                >
+                  <div className="page-content">
+                    <div
+                      className="page-front"
+                      onClick={() => index >= currentPageNumber && nextPage()}
+                    >
+                      <div className="image-container">
+                        <img
+                          src={page.src}
+                          alt={`Page ${index + 1}`}
+                          className="responsive-image"
+                          loading={shouldPreload ? "eager" : "lazy"}
+                          onLoad={(e) => e.target.classList.add("loaded")}
+                          onError={(e) => {
+                            e.target.src = defaultPhotoUrl;
+                            e.target.onerror = null;
+                          }}
+                        />
                       </div>
-                      <div
-                        className="page-back"
-                        onClick={() => index < currentPageNumber && prevPage()}
-                      >
-                        <div className="image-container">
+                    </div>
+                    <div
+                      className="page-back"
+                      onClick={() => index < currentPageNumber && prevPage()}
+                    >
+                      <div className="image-container">
+                        {pages[index + 1] && (
                           <img
-                            src={pages[index + 1]?.src || defaultPhotoUrl}
+                            src={pages[index + 1].src}
                             alt={`Page ${index + 2}`}
                             className="responsive-image"
-                            loading="lazy"
+                            loading={shouldPreload ? "eager" : "lazy"}
+                            onLoad={(e) => e.target.classList.add("loaded")}
                             onError={(e) => {
                               e.target.src = defaultPhotoUrl;
                               e.target.onerror = null;
                             }}
                           />
-                        </div>
+                        )}
                       </div>
                     </div>
                   </div>
-                )
+                </div>
               );
             })}
           </div>
