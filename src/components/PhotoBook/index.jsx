@@ -5,7 +5,7 @@ const PhotoBook = () => {
   const [currentPageNumber, setCurrentPageNumber] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const [showHint, setShowHint] = useState(true);
-
+  const [imagesLoaded, setImagesLoaded] = useState(false);
   const totalImages = 38;
   const totalPages = totalImages;
   const defaultPhotoUrl = "/api/placeholder/800/600?text=Memory";
@@ -43,6 +43,82 @@ const PhotoBook = () => {
 
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    const preloadImages = () => {
+      // Create array of image URLs
+      const imageUrls = [
+        "/images/6.jpg", // Cover
+        "/images/14.jpg", // Top image
+        ...Array.from({ length: 38 }, (_, i) => `/images/${i + 1}.jpg`),
+      ];
+
+      // Preload each image
+      imageUrls.forEach((url) => {
+        const img = new Image();
+        img.src = url;
+      });
+    };
+
+    preloadImages();
+  }, []);
+
+  useEffect(() => {
+    const loadImages = async () => {
+      try {
+        const imageUrls = [
+          "/images/6.jpg",
+          "/images/14.jpg",
+          ...Array.from({ length: 38 }, (_, i) => `/images/${i + 1}.jpg`),
+        ];
+
+        await Promise.all(
+          imageUrls.map(
+            (url) =>
+              new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = resolve;
+                img.onerror = resolve; // Still resolve on error to not block loading
+                img.src = url;
+              })
+          )
+        );
+
+        setImagesLoaded(true);
+      } catch (error) {
+        console.error("Error preloading images:", error);
+        setImagesLoaded(true); // Set to true even on error to show content
+      }
+    };
+
+    loadImages();
+  }, []);
+
+  if (!imagesLoaded) {
+    return (
+      <div
+        className="min-h-screen w-full flex items-center justify-center"
+        style={{ background: "#cef1f0" }}
+      >
+        <style>{`
+          .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid var(--lighter-shade);
+            border-top: 5px solid var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+          }
+
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
+        <div className="loading-spinner"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full" style={{ background: "#cef1f0" }}>
@@ -177,8 +253,8 @@ const PhotoBook = () => {
           position: absolute;
           top: 50%;
           transform: translateY(-50%);
-          width: 44px;
-          height: 44px;
+          width: 32px;  /* Reduced from 44px */
+            height: 32px; /* Reduced from 44px */
           border-radius: 50%;
           background: var(--accent-color);
           border: none;
@@ -206,11 +282,11 @@ const PhotoBook = () => {
         .nav-button.next { right: 20px; }
 
         .arrow {
-          border: solid white;
-          border-width: 0 3px 3px 0;
-          display: inline-block;
-          padding: 4px;
-        }
+  border: solid white;
+  border-width: 0 2px 2px 0;  /* Reduced from 3px */
+  display: inline-block;
+  padding: 3px;  /* Reduced from 4px */
+}
 
         .arrow-left { transform: rotate(135deg); }
         .arrow-right { transform: rotate(-45deg); }
