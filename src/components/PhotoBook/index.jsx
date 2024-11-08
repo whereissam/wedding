@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-const fontStyle = { fontFamily: "Dancing Script, cursive" };
 
 const PhotoBook = () => {
   const [currentPageNumber, setCurrentPageNumber] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const [showHint, setShowHint] = useState(true);
   const [imagesLoaded, setImagesLoaded] = useState(false);
+  const [loadedImages, setLoadedImages] = useState(new Set());
   const totalImages = 38;
   const totalPages = totalImages;
   const defaultPhotoUrl = "/api/placeholder/800/600?text=Memory";
@@ -36,11 +36,26 @@ const PhotoBook = () => {
     }, 600);
   };
 
+  // 新增圖片載入追蹤函數
+  const handleImageLoad = (src) => {
+    setLoadedImages((prev) => {
+      const newSet = new Set(prev);
+      newSet.add(src);
+      return newSet;
+    });
+  };
+
   const createImagePromise = (src) => {
     return new Promise((resolve, reject) => {
       const img = new Image();
-      img.onload = () => resolve(src);
-      img.onerror = () => resolve(defaultPhotoUrl);
+      img.onload = () => {
+        handleImageLoad(src);
+        resolve(src);
+      };
+      img.onerror = () => {
+        handleImageLoad(defaultPhotoUrl);
+        resolve(defaultPhotoUrl);
+      };
       img.src = src;
     });
   };
@@ -53,9 +68,10 @@ const PhotoBook = () => {
     return () => clearTimeout(timer);
   }, []);
 
+  // 優化圖片預載入
   useEffect(() => {
     const preloadImages = async () => {
-      // First batch: Load essential images (first 6 pages)
+      // 預載入前6張圖片和封面
       const essentialImages = [
         "/images/webp/6.webp", // Cover
         "/images/webp/14.webp", // Header
@@ -66,17 +82,10 @@ const PhotoBook = () => {
         await Promise.all(essentialImages.map(createImagePromise));
         setImagesLoaded(true);
 
-        // Second batch: Load next 6 pages
-        const nextBatch = Array.from(
-          { length: 6 },
-          (_, i) => `/images/webp/${i + 7}.webp`
-        );
-        await Promise.all(nextBatch.map(createImagePromise));
-
-        // Third batch: Load remaining images in chunks
+        // 背景載入剩餘圖片
         const remainingImages = Array.from(
-          { length: totalImages - 12 },
-          (_, i) => `/images/webp/${i + 13}.webp`
+          { length: totalImages - 6 },
+          (_, i) => `/images/webp/${i + 7}.webp`
         );
 
         for (let i = 0; i < remainingImages.length; i += 6) {
@@ -92,93 +101,37 @@ const PhotoBook = () => {
     preloadImages();
   }, []);
 
-  useEffect(() => {
-    const loadImages = async () => {
-      try {
-        // First load essential images (first few pages)
-        const essentialUrls = [
-          "/images/webp/6.webp", // Cover
-          "/images/webp/14.webp", // Top image
-          ...Array.from({ length: 6 }, (_, i) => `/images/webp/${i + 1}.webp`),
-        ];
-
-        await Promise.all(
-          essentialUrls.map(
-            (url) =>
-              new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = resolve;
-                img.onerror = resolve;
-                img.src = url;
-              })
-          )
-        );
-
-        setImagesLoaded(true);
-
-        // Then preload the rest
-        const remainingUrls = Array.from(
-          { length: totalImages - 6 },
-          (_, i) => `/images/webp/${i + 7}.webp`
-        );
-
-        remainingUrls.forEach((url) => {
-          const img = new Image();
-          img.src = url;
-        });
-      } catch (error) {
-        console.error("Error preloading images:", error);
-        setImagesLoaded(true);
-      }
-    };
-
-    loadImages();
-  }, []);
-
-  // Add this after your state declarations
   const preloadNearbyImages = useCallback(
     (currentPage) => {
       const preloadRange = 3;
       const start = Math.max(0, currentPage - preloadRange);
       const end = Math.min(totalPages - 1, currentPage + preloadRange);
 
-      const imagesToPreload = [];
       for (let i = start; i <= end; i++) {
-        imagesToPreload.push(`/images/webp/${i + 1}.webp`);
+        const src = `/images/webp/${i + 1}.webp`;
+        if (!loadedImages.has(src)) {
+          createImagePromise(src);
+        }
       }
-
-      Promise.all(imagesToPreload.map(createImagePromise));
     },
-    [totalPages]
+    [loadedImages, totalPages]
   );
 
-  // Add this useEffect to trigger preloading when page changes
   useEffect(() => {
     preloadNearbyImages(currentPageNumber);
   }, [currentPageNumber, preloadNearbyImages]);
 
+  // Loading 畫面優化
   if (!imagesLoaded) {
     return (
       <div
         className="min-h-screen w-full flex items-center justify-center"
         style={{ background: "#cef1f0" }}
       >
-        <style>{`
-          .loading-spinner {
-            width: 50px;
-            height: 50px;
-            border: 5px solid var(--lighter-shade);
-            border-top: 5px solid var(--accent-color);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-          }
-
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}</style>
-        <div className="loading-spinner"></div>
+        <div className="text-center">
+          <div className="loading-spinner mb-4"></div>
+          <div className="text-teal-700">載入中...</div>
+        </div>
       </div>
     );
   }
@@ -414,11 +367,11 @@ const PhotoBook = () => {
               <img
                 src="/images/webp/14.webp"
                 alt="Main Photo"
-                className="responsive-image"
-                onLoad={(e) => e.target.classList.add("loaded")}
+                className={`responsive-image ${loadedImages.has("/images/webp/14.webp") ? "loaded" : ""}`}
+                onLoad={() => handleImageLoad("/images/webp/14.webp")}
                 onError={(e) => {
                   e.target.src = defaultPhotoUrl;
-                  e.target.onerror = null;
+                  handleImageLoad(defaultPhotoUrl);
                 }}
               />
             </div>
@@ -446,12 +399,11 @@ const PhotoBook = () => {
                   <img
                     src="/images/webp/6.webp"
                     alt="Cover"
-                    className="responsive-image"
-                    loading="eager"
-                    onLoad={(e) => e.target.classList.add("loaded")}
+                    className={`responsive-image ${loadedImages.has("/images/webp/6.webp") ? "loaded" : ""}`}
+                    onLoad={() => handleImageLoad("/images/webp/6.webp")}
                     onError={(e) => {
                       e.target.src = defaultPhotoUrl;
-                      e.target.onerror = null;
+                      handleImageLoad(defaultPhotoUrl);
                     }}
                   />
                 </div>
@@ -483,12 +435,12 @@ const PhotoBook = () => {
                         <img
                           src={page.src}
                           alt={`Page ${index + 1}`}
-                          className="responsive-image"
+                          className={`responsive-image ${loadedImages.has(page.src) ? "loaded" : ""}`}
                           loading={shouldPreload ? "eager" : "lazy"}
-                          onLoad={(e) => e.target.classList.add("loaded")}
+                          onLoad={() => handleImageLoad(page.src)}
                           onError={(e) => {
                             e.target.src = defaultPhotoUrl;
-                            e.target.onerror = null;
+                            handleImageLoad(defaultPhotoUrl);
                           }}
                         />
                       </div>
@@ -502,12 +454,12 @@ const PhotoBook = () => {
                           <img
                             src={pages[index + 1].src}
                             alt={`Page ${index + 2}`}
-                            className="responsive-image"
+                            className={`responsive-image ${loadedImages.has(pages[index + 1].src) ? "loaded" : ""}`}
                             loading={shouldPreload ? "eager" : "lazy"}
-                            onLoad={(e) => e.target.classList.add("loaded")}
+                            onLoad={() => handleImageLoad(pages[index + 1].src)}
                             onError={(e) => {
                               e.target.src = defaultPhotoUrl;
-                              e.target.onerror = null;
+                              handleImageLoad(defaultPhotoUrl);
                             }}
                           />
                         )}
