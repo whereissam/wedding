@@ -13,7 +13,7 @@ const PhotoBook = () => {
   // Generate array of pages
   const pages = Array.from({ length: totalPages }, (_, i) => ({
     id: i,
-    src: `/images/${i + 1}.jpg`,
+    src: `/images/webp/${i + 1}.webp`,
   }));
 
   const nextPage = () => {
@@ -57,9 +57,9 @@ const PhotoBook = () => {
     const preloadImages = async () => {
       // First batch: Load essential images (first 6 pages)
       const essentialImages = [
-        "/images/6.jpg", // Cover
-        "/images/14.jpg", // Header
-        ...Array.from({ length: 6 }, (_, i) => `/images/${i + 1}.jpg`),
+        "/images/webp/6.webp", // Cover
+        "/images/webp/14.webp", // Header
+        ...Array.from({ length: 6 }, (_, i) => `/images/webp/${i + 1}.webp`),
       ];
 
       try {
@@ -69,14 +69,14 @@ const PhotoBook = () => {
         // Second batch: Load next 6 pages
         const nextBatch = Array.from(
           { length: 6 },
-          (_, i) => `/images/${i + 7}.jpg`
+          (_, i) => `/images/webp/${i + 7}.webp`
         );
         await Promise.all(nextBatch.map(createImagePromise));
 
         // Third batch: Load remaining images in chunks
         const remainingImages = Array.from(
           { length: totalImages - 12 },
-          (_, i) => `/images/${i + 13}.jpg`
+          (_, i) => `/images/webp/${i + 13}.webp`
         );
 
         for (let i = 0; i < remainingImages.length; i += 6) {
@@ -97,9 +97,9 @@ const PhotoBook = () => {
       try {
         // First load essential images (first few pages)
         const essentialUrls = [
-          "/images/6.jpg", // Cover
-          "/images/14.jpg", // Top image
-          ...Array.from({ length: 6 }, (_, i) => `/images/${i + 1}.jpg`),
+          "/images/webp/6.webp", // Cover
+          "/images/webp/14.webp", // Top image
+          ...Array.from({ length: 6 }, (_, i) => `/images/webp/${i + 1}.webp`),
         ];
 
         await Promise.all(
@@ -119,7 +119,7 @@ const PhotoBook = () => {
         // Then preload the rest
         const remainingUrls = Array.from(
           { length: totalImages - 6 },
-          (_, i) => `/images/${i + 7}.jpg`
+          (_, i) => `/images/webp/${i + 7}.webp`
         );
 
         remainingUrls.forEach((url) => {
@@ -144,7 +144,7 @@ const PhotoBook = () => {
 
       const imagesToPreload = [];
       for (let i = start; i <= end; i++) {
-        imagesToPreload.push(`/images/${i + 1}.jpg`);
+        imagesToPreload.push(`/images/webp/${i + 1}.webp`);
       }
 
       Promise.all(imagesToPreload.map(createImagePromise));
@@ -412,7 +412,7 @@ const PhotoBook = () => {
           <div className="mb-8 main-image-container">
             <div className="w-full h-64 relative main-image">
               <img
-                src="/images/14.jpg"
+                src="/images/webp/14.webp"
                 alt="Main Photo"
                 className="responsive-image"
                 onLoad={(e) => e.target.classList.add("loaded")}
@@ -444,7 +444,7 @@ const PhotoBook = () => {
               <div className="page-front">
                 <div className="image-container">
                   <img
-                    src="/images/6.jpg"
+                    src="/images/webp/6.webp"
                     alt="Cover"
                     className="responsive-image"
                     loading="eager"
