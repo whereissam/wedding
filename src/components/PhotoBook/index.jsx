@@ -80,27 +80,43 @@ const PhotoBook = () => {
 
   const handleNext = (e) => {
     e.preventDefault();
+    e.stopPropagation();
     bookRef.current.pageFlip().flipNext();
   };
 
   const handlePrev = (e) => {
     e.preventDefault();
+    e.stopPropagation();
     bookRef.current.pageFlip().flipPrev();
   };
 
   useEffect(() => {
-    const handlePageFlip = (e) => {
-      e.preventDefault();
-      const currentScroll = window.scrollY;
-      requestAnimationFrame(() => {
-        window.scrollTo(0, currentScroll);
-      });
+    const preventScroll = (e) => {
+      if (
+        e.target.closest(".stf__parent") ||
+        e.target.closest('button[aria-label="Next page"]') ||
+        e.target.closest('button[aria-label="Previous page"]')
+      ) {
+        e.preventDefault();
+      }
     };
 
-    document.addEventListener("click", handlePageFlip, { passive: false });
+    document.addEventListener("click", preventScroll, { passive: false });
+
+    // Prevent touchmove from causing scroll
+    const preventTouchScroll = (e) => {
+      if (e.target.closest(".stf__parent")) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener("touchmove", preventTouchScroll, {
+      passive: false,
+    });
 
     return () => {
-      document.removeEventListener("click", handlePageFlip);
+      document.removeEventListener("click", preventScroll);
+      document.removeEventListener("touchmove", preventTouchScroll);
     };
   }, []);
 
@@ -117,6 +133,42 @@ const PhotoBook = () => {
   //     </div>
   //   );
   // }
+
+  // Add window size hook
+  const [windowSize, setWindowSize] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
+
+  // Update sizes on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Calculate book dimensions
+  const getBookDimensions = () => {
+    const isMobile = windowSize.width <= 768;
+    if (isMobile) {
+      return {
+        width: Math.min(windowSize.width * 0.9, 500),
+        height: Math.min(windowSize.height * 0.6, 600),
+      };
+    }
+    return {
+      width: Math.min(windowSize.width * 0.35, 800), // Reduced from 0.48 to 0.35
+      height: windowSize.height * 0.7, // Reduced from 0.8 to 0.7
+    };
+  };
+
+  const { width, height } = getBookDimensions();
 
   return (
     <div className="min-h-screen w-full" style={{ background: "#cef1f0" }}>
@@ -156,34 +208,36 @@ const PhotoBook = () => {
         }
       `}</style>
 
-      <div className="main-container p-4 md:p-8 max-w-6xl mx-auto">
-        <div className="book-header bg-white rounded-lg p-4 md:p-8 mb-8 shadow-lg">
-          <div className="mb-4 main-image-container">
-            <div className="main-image relative w-full h-full">
-              <img
-                src="/images/webp/14.webp"
-                alt="Main Photo"
-                className={`absolute inset-0 w-full h-full object-contain ${
-                  loadedImages.has("/images/webp/14.webp") ? "loaded" : ""
-                }`}
-                onLoad={() => handleImageLoad("/images/webp/14.webp")}
-                onError={(e) => {
-                  e.target.src = defaultPhotoUrl;
-                  handleImageLoad(defaultPhotoUrl);
-                }}
-              />
+      <div className="main-container p-4 md:p-8">
+        <div className="max-w-6xl mx-auto">
+          <div className="book-header bg-white rounded-lg p-4 md:p-8 mb-8 shadow-lg">
+            <div className="mb-4 main-image-container">
+              <div className="main-image relative w-full h-full">
+                <img
+                  src="/images/webp/14.webp"
+                  alt="Main Photo"
+                  className={`absolute inset-0 w-full h-full object-contain ${
+                    loadedImages.has("/images/webp/14.webp") ? "loaded" : ""
+                  }`}
+                  onLoad={() => handleImageLoad("/images/webp/14.webp")}
+                  onError={(e) => {
+                    e.target.src = defaultPhotoUrl;
+                    handleImageLoad(defaultPhotoUrl);
+                  }}
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="text-center mb-2">
-            <h1 className="book-title">Merry Story</h1>
+            <div className="text-center mb-2">
+              <h1 className="book-title">Merry Story</h1>
+            </div>
           </div>
         </div>
 
-        <div className="relative">
+        <div className="relative w-full">
           <button
             onClick={handlePrev}
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-2 bg-teal-500 hover:bg-teal-600 text-white rounded-r-lg shadow-lg transition-all duration-200 focus:outline-none"
+            className="absolute left-4 top-1/2 -translate-y-1/2 z-10 p-2 bg-teal-500 hover:bg-teal-600 text-white rounded-r-lg shadow-lg transition-all duration-200 focus:outline-none"
             aria-label="Previous page"
           >
             <svg
@@ -204,7 +258,7 @@ const PhotoBook = () => {
 
           <button
             onClick={handleNext}
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-2 bg-teal-500 hover:bg-teal-600 text-white rounded-l-lg shadow-lg transition-all duration-200 focus:outline-none"
+            className="absolute right-4 top-1/2 -translate-y-1/2 z-10 p-2 bg-teal-500 hover:bg-teal-600 text-white rounded-l-lg shadow-lg transition-all duration-200 focus:outline-none"
             aria-label="Next page"
           >
             <svg
@@ -223,38 +277,44 @@ const PhotoBook = () => {
             </svg>
           </button>
 
-          <HTMLFlipBook
-            width={isMobileRef.current ? 300 : 500}
-            height={isMobileRef.current ? 400 : 600}
-            size="fixed"
-            showCover={false}
-            maxShadowOpacity={0.5}
-            mobileScrollSupport={true}
-            onFlip={onFlip}
-            className="mx-auto"
-            ref={bookRef}
-            usePortrait={true}
-            startPage={0}
-            drawShadow={true}
-            flippingTime={1000}
-            useMouseEvents={true}
-            swipeDistance={30}
-            clickEventForward={true}
-          >
-            {pages.map((page) => (
-              <Page
-                key={page.id}
-                number={page.id + 1}
-                src={page.src}
-                loaded={loadedImages.has(page.src)}
-                onLoad={() => handleImageLoad(page.src)}
-                onError={(e) => {
-                  e.target.src = defaultPhotoUrl;
-                  handleImageLoad(defaultPhotoUrl);
-                }}
-              />
-            ))}
-          </HTMLFlipBook>
+          <div className="flex justify-center items-center">
+            <HTMLFlipBook
+              width={width}
+              height={height}
+              size="stretch"
+              minWidth={300}
+              maxWidth={2400}
+              minHeight={400}
+              maxHeight={1400}
+              showCover={false}
+              maxShadowOpacity={0.5}
+              mobileScrollSupport={true}
+              onFlip={onFlip}
+              className="mx-auto"
+              ref={bookRef}
+              usePortrait={true}
+              startPage={0}
+              drawShadow={true}
+              flippingTime={1000}
+              useMouseEvents={true}
+              swipeDistance={30}
+              clickEventForward={true}
+            >
+              {pages.map((page) => (
+                <Page
+                  key={page.id}
+                  number={page.id + 1}
+                  src={page.src}
+                  loaded={loadedImages.has(page.src)}
+                  onLoad={() => handleImageLoad(page.src)}
+                  onError={(e) => {
+                    e.target.src = defaultPhotoUrl;
+                    handleImageLoad(defaultPhotoUrl);
+                  }}
+                />
+              ))}
+            </HTMLFlipBook>
+          </div>
 
           {showHint && (
             <div className="absolute inset-x-0 top-4 text-center bg-teal-500 text-white py-2 rounded-md mx-4">
