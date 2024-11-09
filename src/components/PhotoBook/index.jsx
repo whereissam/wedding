@@ -4,8 +4,8 @@ import PropTypes from "prop-types";
 
 const Page = React.forwardRef((props, ref) => {
   return (
-    <div className="relative h-full w-full" ref={ref}>
-      <div className="h-full w-full bg-white shadow-lg">
+    <div className="relative demoPage" ref={ref}>
+      <div className="h-full w-full bg-white p-2">
         <img
           src={props.src}
           alt={`Page ${props.number}`}
@@ -78,13 +78,31 @@ const PhotoBook = () => {
     setCurrentPageNumber(e.data);
   }, []);
 
-  const handleNext = () => {
+  const handleNext = (e) => {
+    e.preventDefault();
     bookRef.current.pageFlip().flipNext();
   };
 
-  const handlePrev = () => {
+  const handlePrev = (e) => {
+    e.preventDefault();
     bookRef.current.pageFlip().flipPrev();
   };
+
+  useEffect(() => {
+    const handlePageFlip = (e) => {
+      e.preventDefault();
+      const currentScroll = window.scrollY;
+      requestAnimationFrame(() => {
+        window.scrollTo(0, currentScroll);
+      });
+    };
+
+    document.addEventListener("click", handlePageFlip, { passive: false });
+
+    return () => {
+      document.removeEventListener("click", handlePageFlip);
+    };
+  }, []);
 
   // if (!imagesLoaded) {
   //   return (
@@ -208,17 +226,20 @@ const PhotoBook = () => {
           <HTMLFlipBook
             width={isMobileRef.current ? 300 : 500}
             height={isMobileRef.current ? 400 : 600}
-            size="stretch"
-            minWidth={300}
-            maxWidth={1000}
-            minHeight={400}
-            maxHeight={1000}
+            size="fixed"
+            showCover={false}
             maxShadowOpacity={0.5}
-            showCover={true}
             mobileScrollSupport={true}
             onFlip={onFlip}
             className="mx-auto"
             ref={bookRef}
+            usePortrait={true}
+            startPage={0}
+            drawShadow={true}
+            flippingTime={1000}
+            useMouseEvents={true}
+            swipeDistance={30}
+            clickEventForward={true}
           >
             {pages.map((page) => (
               <Page
