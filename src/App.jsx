@@ -13,19 +13,78 @@ const App = () => {
   const audioRef = useRef(null);
   const [isMusicPlaying, setIsMusicPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const wasPlayingRef = useRef(false); // Track if music was playing before hiding
 
-  // 初始化音樂播放
+  // Handle visibility change
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.hidden && audioRef.current) {
+        wasPlayingRef.current = !audioRef.current.paused; // Store playing state
+        audioRef.current.pause();
+        setIsMusicPlaying(false);
+      } else if (
+        !document.hidden &&
+        audioRef.current &&
+        wasPlayingRef.current
+      ) {
+        // Resume if it was playing before
+        try {
+          await audioRef.current.play();
+          setIsMusicPlaying(true);
+        } catch (err) {
+          console.error("Failed to resume playback:", err);
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  // Handle page blur (when switching apps)
+  useEffect(() => {
+    const handleBlur = () => {
+      if (audioRef.current) {
+        wasPlayingRef.current = !audioRef.current.paused; // Store playing state
+        audioRef.current.pause();
+        setIsMusicPlaying(false);
+      }
+    };
+
+    const handleFocus = async () => {
+      if (audioRef.current && wasPlayingRef.current) {
+        try {
+          await audioRef.current.play();
+          setIsMusicPlaying(true);
+        } catch (err) {
+          console.error("Failed to resume playback:", err);
+        }
+      }
+    };
+
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, []);
+
+  // Initialize music playback
   useEffect(() => {
     const initMusic = async () => {
       if (audioRef.current) {
         try {
-          audioRef.current.volume = 0.5; // 設置適當的音量
+          audioRef.current.volume = 0.5;
           await audioRef.current.play();
           setIsMusicPlaying(true);
           setIsLoading(false);
         } catch (error) {
           console.log("Initial autoplay failed - waiting for user interaction");
-          // 添加點擊事件來開始播放
           const startPlayback = async () => {
             try {
               await audioRef.current.play();
@@ -42,7 +101,6 @@ const App = () => {
 
     initMusic();
 
-    // 清理函數
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
