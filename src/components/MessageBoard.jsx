@@ -136,25 +136,33 @@ const MessageList = ({ messages }) => {
     }
   }, [messages]);
 
+  const celebratoryWords = ["新婚快樂", "百年好合", "早生貴子", "永浴愛河"];
+
   const renderMessageWithHearts = (text) => {
-    if (text.includes("新婚快樂")) {
-      const parts = text.split("新婚快樂");
-      return (
-        <p className="text-gray-700 whitespace-pre-wrap">
-          {parts[0]}
-          <span className="relative inline-flex items-center">
-            <span className="congratulations-text">新婚快樂</span>
-            <span className="inline-block ml-2 hearts-animation">
-              <span className="heart">❤️</span>
-              <span className="heart">❤️</span>
-              <span className="heart">❤️</span>
+    let result = text;
+
+    for (const word of celebratoryWords) {
+      if (text.includes(word)) {
+        const parts = text.split(word);
+        result = (
+          <p className="text-gray-700 whitespace-pre-wrap">
+            {parts[0]}
+            <span className="relative inline-flex items-center">
+              <span className="congratulations-text">{word}</span>
+              <span className="inline-block ml-2 hearts-animation">
+                <span className="heart">❤️</span>
+                <span className="heart">❤️</span>
+                <span className="heart">❤️</span>
+              </span>
             </span>
-          </span>
-          {parts[1]}
-        </p>
-      );
+            {parts[1]}
+          </p>
+        );
+        break; // Stop after first match to avoid nested JSX issues
+      }
     }
-    return <p className="text-gray-700 whitespace-pre-wrap">{text}</p>;
+
+    return result;
   };
 
   return (
