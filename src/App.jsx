@@ -97,7 +97,7 @@ const App = () => {
       <audio ref={audioRef} src={music} loop preload="auto" />
 
       {/* 音樂控制按鈕 */}
-      <button
+      {/* <button
         onClick={toggleMusic}
         className={`fixed bottom-4 left-4 z-50 bg-white p-3 rounded-full shadow-lg 
           hover:bg-gray-100 transition-all duration-200 flex items-center space-x-2
@@ -133,7 +133,7 @@ const App = () => {
               ? "背景音樂開啟"
               : "背景音樂關閉"}
         </span>
-      </button>
+      </button> */}
 
       <PhotoBook />
       <div className="py-8" style={{ background: "#cef1f0" }}>
