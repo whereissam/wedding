@@ -164,7 +164,7 @@ const PhotoBook = () => {
     }
     return {
       width: Math.min(windowSize.width * 0.35, 800), // Reduced from 0.48 to 0.35
-      height: windowSize.height * 0.7, // Reduced from 0.8 to 0.7
+      height: Math.min(windowSize.height * 0.65, 800), // Reduced from 0.8 to 0.65
     };
   };
 

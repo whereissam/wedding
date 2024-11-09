@@ -21,8 +21,10 @@ body {
 }
 
 .book {
-  width: 800px;
-  height: 600px;
+  width: 90%;
+  max-width: 800px;
+  height: 65vh;
+  max-height: 800px;
   position: relative;
   perspective: 1500px;
   margin: 0 auto;
@@ -320,4 +322,26 @@ body {
   display: flex !important;
   justify-content: center !important;
   align-items: center !important;
+}
+
+/* Update responsive breakpoints */
+@media (max-width: 1200px) {
+  .book {
+    max-width: 700px;
+    height: 60vh;
+  }
+}
+
+@media (max-width: 900px) {
+  .book {
+    max-width: 600px;
+    height: 55vh;
+  }
+}
+
+@media (max-width: 650px) {
+  .book {
+    width: 95%;
+    height: 50vh;
+  }
 }
