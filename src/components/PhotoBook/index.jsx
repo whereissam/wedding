@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 const PhotoBook = () => {
   const [currentPageNumber, setCurrentPageNumber] = useState(0);
@@ -6,59 +6,80 @@ const PhotoBook = () => {
   const [showHint, setShowHint] = useState(true);
   const [imagesLoaded, setImagesLoaded] = useState(false);
   const [loadedImages, setLoadedImages] = useState(new Set());
+  const animationRef = useRef(null);
+  const isMobileRef = useRef(window.innerWidth <= 768);
+
   const totalImages = 38;
   const totalPages = totalImages;
   const defaultPhotoUrl = "/api/placeholder/800/600?text=Memory";
 
-  // Generate array of pages
-  const pages = Array.from({ length: totalPages }, (_, i) => ({
-    id: i,
-    src: `/images/webp/${i + 1}.webp`,
-  }));
+  // Generate array of pages with memoization
+  const pages = useRef(
+    Array.from({ length: totalPages }, (_, i) => ({
+      id: i,
+      src: `/images/webp/${i + 1}.webp`,
+    }))
+  ).current;
 
-  const nextPage = () => {
+  const nextPage = useCallback(() => {
     if (isAnimating || currentPageNumber >= totalPages - 1) return;
     setIsAnimating(true);
 
-    setTimeout(() => {
-      setIsAnimating(false);
-      setCurrentPageNumber((prev) => Math.min(prev + 1, totalPages - 1));
-    }, 600);
-  };
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+    }
 
-  const prevPage = () => {
+    animationRef.current = requestAnimationFrame(() => {
+      setTimeout(() => {
+        setIsAnimating(false);
+        setCurrentPageNumber((prev) => Math.min(prev + 1, totalPages - 1));
+      }, 600);
+    });
+  }, [isAnimating, currentPageNumber, totalPages]);
+
+  const prevPage = useCallback(() => {
     if (isAnimating || currentPageNumber <= 0) return;
     setIsAnimating(true);
 
-    setTimeout(() => {
-      setIsAnimating(false);
-      setCurrentPageNumber((prev) => Math.max(prev - 1, 0));
-    }, 600);
-  };
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+    }
 
-  // 新增圖片載入追蹤函數
-  const handleImageLoad = (src) => {
-    setLoadedImages((prev) => {
-      const newSet = new Set(prev);
-      newSet.add(src);
-      return newSet;
+    animationRef.current = requestAnimationFrame(() => {
+      setTimeout(() => {
+        setIsAnimating(false);
+        setCurrentPageNumber((prev) => Math.max(prev - 1, 0));
+      }, 600);
     });
-  };
+  }, [isAnimating, currentPageNumber]);
 
-  const createImagePromise = (src) => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        handleImageLoad(src);
-        resolve(src);
-      };
-      img.onerror = () => {
-        handleImageLoad(defaultPhotoUrl);
-        resolve(defaultPhotoUrl);
-      };
-      img.src = src;
+  const handleImageLoad = useCallback((src) => {
+    requestAnimationFrame(() => {
+      setLoadedImages((prev) => {
+        const newSet = new Set(prev);
+        newSet.add(src);
+        return newSet;
+      });
     });
-  };
+  }, []);
+
+  const createImagePromise = useCallback(
+    (src) => {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          handleImageLoad(src);
+          resolve(src);
+        };
+        img.onerror = () => {
+          handleImageLoad(defaultPhotoUrl);
+          resolve(defaultPhotoUrl);
+        };
+        img.src = src;
+      });
+    },
+    [handleImageLoad]
+  );
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -68,28 +89,27 @@ const PhotoBook = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  // 優化圖片預載入
   useEffect(() => {
     const preloadImages = async () => {
-      // 預載入前6張圖片和封面
       const essentialImages = [
         "/images/webp/6.webp", // Cover
         "/images/webp/14.webp", // Header
-        ...Array.from({ length: 6 }, (_, i) => `/images/webp/${i + 1}.webp`),
+        ...Array.from({ length: 3 }, (_, i) => `/images/webp/${i + 1}.webp`),
       ];
 
       try {
         await Promise.all(essentialImages.map(createImagePromise));
         setImagesLoaded(true);
 
-        // 背景載入剩餘圖片
         const remainingImages = Array.from(
-          { length: totalImages - 6 },
-          (_, i) => `/images/webp/${i + 7}.webp`
+          { length: totalImages - 3 },
+          (_, i) => `/images/webp/${i + 4}.webp`
         );
 
-        for (let i = 0; i < remainingImages.length; i += 6) {
-          const chunk = remainingImages.slice(i, i + 6);
+        const chunkSize = isMobileRef.current ? 3 : 6;
+        for (let i = 0; i < remainingImages.length; i += chunkSize) {
+          const chunk = remainingImages.slice(i, i + chunkSize);
+          await new Promise((resolve) => setTimeout(resolve, 100));
           await Promise.all(chunk.map(createImagePromise));
         }
       } catch (error) {
@@ -99,29 +119,38 @@ const PhotoBook = () => {
     };
 
     preloadImages();
-  }, []);
+  }, [createImagePromise, totalImages]);
 
   const preloadNearbyImages = useCallback(
     (currentPage) => {
-      const preloadRange = 3;
+      const preloadRange = isMobileRef.current ? 2 : 3;
       const start = Math.max(0, currentPage - preloadRange);
       const end = Math.min(totalPages - 1, currentPage + preloadRange);
 
-      for (let i = start; i <= end; i++) {
-        const src = `/images/webp/${i + 1}.webp`;
-        if (!loadedImages.has(src)) {
-          createImagePromise(src);
+      requestAnimationFrame(() => {
+        for (let i = start; i <= end; i++) {
+          const src = `/images/webp/${i + 1}.webp`;
+          if (!loadedImages.has(src)) {
+            createImagePromise(src);
+          }
         }
-      }
+      });
     },
-    [loadedImages, totalPages]
+    [loadedImages, totalPages, createImagePromise]
   );
 
   useEffect(() => {
     preloadNearbyImages(currentPageNumber);
   }, [currentPageNumber, preloadNearbyImages]);
 
-  // Loading 畫面優化
+  useEffect(() => {
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, []);
+
   if (!imagesLoaded) {
     return (
       <div
@@ -139,7 +168,7 @@ const PhotoBook = () => {
   return (
     <div className="min-h-screen w-full" style={{ background: "#cef1f0" }}>
       <style>{`
-       @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap');
 
         :root {
           --base-color: #cef1f0;
@@ -151,6 +180,10 @@ const PhotoBook = () => {
 
         body {
           background: var(--base-color);
+          margin: 0;
+          padding: 0;
+          min-height: 100vh;
+          overflow-x: hidden;
         }
 
         .main-container {
@@ -168,6 +201,10 @@ const PhotoBook = () => {
           background: white;
           border-radius: 0.5rem;
           box-shadow: 0 10px 30px rgba(44, 126, 124, 0.1);
+          height: auto;
+          aspect-ratio: 3/2;
+          transform: translateZ(0);
+          will-change: transform;
         }
 
         .book-header {
@@ -177,7 +214,7 @@ const PhotoBook = () => {
           margin-bottom: 2rem;
           box-shadow: 0 4px 15px rgba(44, 126, 124, 0.05);
         }
-        
+
         .book-content {
           position: relative;
           width: 100%;
@@ -223,6 +260,7 @@ const PhotoBook = () => {
           transform-style: preserve-3d;
           background: white;
           box-shadow: -5px 0 25px rgba(44, 126, 124, 0.1);
+          overflow: hidden;
         }
 
         .page-front,
@@ -237,6 +275,7 @@ const PhotoBook = () => {
           background: white;
           overflow: hidden;
           border: 1px solid var(--lighter-shade);
+          box-sizing: border-box;
         }
 
         .page-back {
@@ -247,39 +286,38 @@ const PhotoBook = () => {
         .image-container {
           width: 100%;
           height: 100%;
+          position: relative;
           display: flex;
           justify-content: center;
           align-items: center;
-          position: relative;
+          overflow: hidden;
         }
 
         .image-container img {
-  opacity: 0;
-  transition: opacity 0.3s ease-in-out;
-}
-
-.image-container img.loaded {
-  opacity: 1;
-}
-
-        .responsive-image {
-          max-width: 100%;
-          max-height: 100%;
-          width: auto;
-          height: auto;
-          object-fit: contain;
           position: absolute;
           top: 50%;
           left: 50%;
           transform: translate(-50%, -50%);
+          max-width: 100%;
+          max-height: 100%;
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          opacity: 0;
+          transition: opacity 0.2s ease-in-out;
+          will-change: opacity;
+        }
+
+        .image-container img.loaded {
+          opacity: 1;
         }
 
         .nav-button {
           position: absolute;
           top: 50%;
           transform: translateY(-50%);
-          width: 32px;  /* Reduced from 44px */
-            height: 32px; /* Reduced from 44px */
+          width: 32px;
+          height: 32px;
           border-radius: 50%;
           background: var(--accent-color);
           border: none;
@@ -307,18 +345,18 @@ const PhotoBook = () => {
         .nav-button.next { right: 20px; }
 
         .arrow {
-  border: solid white;
-  border-width: 0 2px 2px 0;  /* Reduced from 3px */
-  display: inline-block;
-  padding: 3px;  /* Reduced from 4px */
-}
+          border: solid white;
+          border-width: 0 2px 2px 0;
+          display: inline-block;
+          padding: 3px;
+        }
 
         .arrow-left { transform: rotate(135deg); }
         .arrow-right { transform: rotate(-45deg); }
 
         .page-hint {
-          background: var(--accent-color) !important;
-          color: white !important;
+          background: var(--accent-color);
+          color: white;
           font-weight: 500;
           border-radius: 0.5rem;
           padding: 0.5rem;
@@ -335,39 +373,96 @@ const PhotoBook = () => {
         }
 
         .book-title {
-  color: var(--text-color);
-  font-size: 3.5rem;
-  font-weight: bold;
-  font-family: 'Dancing Script', cursive;
-  text-shadow: 2px 2px 4px rgba(44, 126, 124, 0.2);
-  letter-spacing: 2px;
-  background: linear-gradient(45deg, var(--text-color), var(--accent-color));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  padding: 0.5rem;
-  margin: 0;
-  line-height: 1.2;
-  background-clip: text;
-}
+          color: var(--text-color);
+          font-size: 3.5rem;
+          font-weight: bold;
+          font-family: 'Dancing Script', cursive;
+          text-shadow: 2px 2px 4px rgba(44, 126, 124, 0.2);
+          letter-spacing: 2px;
+          background: linear-gradient(45deg, var(--text-color), var(--accent-color));
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          padding: 0.5rem;
+          margin: 0;
+          line-height: 1.2;
+          background-clip: text;
+        }
 
-.main-image img {
-  opacity: 0;
-  transition: opacity 0.3s ease-in-out;
-}
+        .main-image-container {
+          aspect-ratio: 9/12;
+          width: 100%;
+          overflow: hidden;
+          border-radius: 0.5rem;
+          background: white;
+        }
 
-.main-image img.loaded {
-  opacity: 1;
-}
+        .main-image {
+          position: relative;
+          width: 100%;
+          height: 100%;
+        }
+
+        .loading-spinner {
+          width: 40px;
+          height: 40px;
+          border: 3px solid #e5f8f7;
+          border-top: 3px solid #7fc7c5;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+          .main-container {
+            padding: 1rem;
+          }
+
+          .book {
+            aspect-ratio: 4/3;
+          }
+
+          .book-header {
+            padding: 1rem;
+          }
+
+          .page-front,
+          .page-back {
+            padding: 0.5rem;
+          }
+
+          .nav-button {
+            width: 28px;
+            height: 28px;
+          }
+
+          .nav-button.prev {
+            left: 10px;
+          }
+
+          .nav-button.next {
+            right: 10px;
+          }
+
+          .book-title {
+            font-size: 2.5rem;
+          }
+        }
       `}</style>
 
       <div className="main-container">
         <div className="book-header">
-          <div className="mb-8 main-image-container">
-            <div className="w-full h-64 relative main-image">
+          <div className="mb-4 main-image-container">
+            <div className="main-image relative w-full h-full">
               <img
                 src="/images/webp/14.webp"
                 alt="Main Photo"
-                className={`responsive-image ${loadedImages.has("/images/webp/14.webp") ? "loaded" : ""}`}
+                className={`absolute inset-0 w-full h-full object-contain ${
+                  loadedImages.has("/images/webp/14.webp") ? "loaded" : ""
+                }`}
                 onLoad={() => handleImageLoad("/images/webp/14.webp")}
                 onError={(e) => {
                   e.target.src = defaultPhotoUrl;
@@ -377,7 +472,7 @@ const PhotoBook = () => {
             </div>
           </div>
 
-          <div className="text-center mb-8">
+          <div className="text-center mb-2">
             <h1 className="book-title">Merry Story</h1>
           </div>
         </div>
